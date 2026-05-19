@@ -1,18 +1,32 @@
-"""Exception hierarchy mirroring :mod:`pathlib` semantics, adapted to S3."""
+"""Exception hierarchy used across the package.
+
+The error types mirror :mod:`pathlib` semantics and inherit from the closest
+matching builtin (e.g. :class:`IsAPrefixError` derives from
+:class:`IsADirectoryError`) so callers may catch either the ezs3 type or its
+stdlib equivalent.
+"""
 
 from __future__ import annotations
 
 
 class S3Error(Exception):
-    """Base class for all ezs3 errors."""
+    """Root of the ezs3 exception hierarchy."""
 
 
 class IsAPrefixError(S3Error, IsADirectoryError):
-    """Raised when a key operation is attempted on an S3 prefix."""
+    """Raised when a key-only operation targets an S3 prefix.
+
+    The S3 counterpart of :class:`IsADirectoryError`. Triggered by, for example,
+    calling :meth:`~ezs3.S3Path.read_text` on a path that exists as a prefix.
+    """
 
 
 class NotAPrefixError(S3Error, NotADirectoryError):
-    """Raised when a prefix operation is attempted on an S3 key."""
+    """Raised when a prefix-only operation targets an S3 key.
+
+    The S3 counterpart of :class:`NotADirectoryError`. Triggered by, for example,
+    calling :meth:`~ezs3.S3Path.iterdir` on a path that exists as a key.
+    """
 
 
 class S3KeyNotFoundError(S3Error, FileNotFoundError):
@@ -20,19 +34,30 @@ class S3KeyNotFoundError(S3Error, FileNotFoundError):
 
 
 class BucketNotFoundError(S3Error, FileNotFoundError):
-    """Raised when a bucket does not exist."""
+    """Raised when a referenced bucket does not exist."""
 
 
 class BucketAlreadyExistsError(S3Error, FileExistsError):
-    """Raised when attempting to create a bucket that already exists."""
+    """Raised when creating a bucket that already exists.
+
+    Set ``exists_ok=True`` on :meth:`~ezs3.Client.create_bucket` to suppress.
+    """
 
 
 class PathNotAttachedError(S3Error, ValueError):
-    """Raised when an operation requires a bucket but the path has none."""
+    """Raised when an operation requires a bucket but the path is free.
+
+    Free paths are constructed via ``S3Path("a/b/c")`` and must be attached to
+    a bucket (e.g. via :meth:`~ezs3.S3Path.attach`) before performing I/O.
+    """
 
 
 class BucketMismatchError(S3Error, ValueError):
-    """Raised when a :class:`Bucket` is used with a path attached to another bucket."""
+    """Raised when a :class:`~ezs3.Bucket` is used with a path bound to another.
+
+    Cross-bucket operations are disallowed to prevent silent data routing
+    surprises. Use :meth:`~ezs3.S3Path.attach` to rebind the path explicitly.
+    """
 
 
 __all__ = [

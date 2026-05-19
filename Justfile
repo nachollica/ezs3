@@ -64,6 +64,23 @@ test-integration:
 tox:
     uv run tox
 
+# Documentation
+
+[doc("Build HTML API docs into `site/`.")]
+[group("docs")]
+docs:
+    uv run pdoc ezs3 --docformat google --output-directory site
+
+[doc("Serve API docs with hot-reload at http://localhost:8080.")]
+[group("docs")]
+docs-serve:
+    uv run pdoc ezs3 --docformat google --host localhost --port 8080
+
+[doc("Remove generated docs.")]
+[group("docs")]
+docs-clean:
+    rm -rf site/
+
 # Local S3-compatible container (using MinIO server).
 
 [doc("Start a local MinIO container exposing the S3 API on :9000 and console on :9001.")]

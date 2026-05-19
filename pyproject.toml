@@ -33,6 +33,7 @@ dev = [
     "ipython>=8.12.3",
     "moto[s3]>=5.0.0",
     "boto3-stubs[s3]>=1.37.0",
+    "pdoc>=15.0.0",
 ]
 
 # Build
@@ -118,6 +119,7 @@ docstring-code-format = true
 select = [
     "A",        # Detect shadowing of Python builtins
     "B",        # Catch likely bugs and bad design (flake8-bugbear)
+    "D",        # pydocstyle (all docstring rules)
     "E",        # pycodestyle errors
     "F",        # Pyflakes: unused/undefined names, import errors
     "I",        # Sort and group imports (isort)
@@ -128,10 +130,20 @@ select = [
 ]
 ignore = [
     "E731",     # Lambda assignment instead of `def`
+    # Google docstring convention: ignore rules incompatible with it plus a small
+    # pragmatic set (private-init docstrings, dunders, magic methods).
+    "D105",     # Missing docstring in magic method
+    "D107",     # Missing docstring in `__init__`
+    "D203",     # 1 blank line before class docstring (incompatible with D211).
+    "D213",     # Multi-line summary on second line (incompatible with D212).
 ]
 
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.ruff.lint.per-file-ignores]
-"src/tests/*" = ["S", "INP001"]
+"src/tests/*" = ["S", "INP001", "D"]
+"src/ezs3/_exceptions.py" = ["D101"]  # exception classes are self-documenting
 
 [tool.mypy]
 python_version = "3.9"
