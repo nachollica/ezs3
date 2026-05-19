@@ -47,7 +47,7 @@ class S3:
         except botocore.exceptions.ClientError as e:
             not_allowed = e.response["Error"]["Code"] == "AccessDenied"
             if default_bucket is None and not_allowed:
-                raise ValueError("Can't list all buckets. Provide a `default_bucket`.")
+                raise ValueError("Can't list all buckets. Provide a `default_bucket`.") from e
             bucket = self._resource.Bucket(default_bucket)
             self.buckets = dictdot({default_bucket: bucket})
 
@@ -153,7 +153,7 @@ class S3:
                 # else, try to download keys under `s3_source`.
                 keys = self.list_keys(s3_source, remove_prefix=True)
                 if not keys:
-                    raise FileNotFoundError(f"Nothing to download from {s3_source}.")
+                    raise FileNotFoundError(f"Nothing to download from {s3_source}.") from e
 
                 for s3_key in keys:
                     abs_local_path = self.get_abspath(
@@ -167,7 +167,7 @@ class S3:
                         overwrite,
                     )
             else:
-                raise FileNotFoundError(f"Nothing to download from {s3_source}.")
+                raise FileNotFoundError(f"Nothing to download from {s3_source}.") from e
 
     def remove(self, *s3_keys):
         self.bucket.delete_objects(Delete={"Objects": [{"Key": k} for k in s3_keys]})
