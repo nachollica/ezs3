@@ -1,7 +1,5 @@
 __pycache__/
 
-*.json
-
 build/
 dist/
 eggs/

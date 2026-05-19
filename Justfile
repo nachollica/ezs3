@@ -46,12 +46,49 @@ lint:
 tc:
     uv run mypy ./src
 
-[doc("Run tests under `src/tests/`.")]
+[doc("Run unit tests under `src/tests/` (excludes integration).")]
 [group("dev")]
 test:
     uv run pytest
+
+[doc("Run integration tests against the local S3 container. Requires `just s3-local-up`.")]
+[group("dev")]
+test-integration:
+    EZS3_S3_ENDPOINT_URL=http://localhost:9000 \
+    EZS3_S3_ACCESS_KEY=minioadmin \
+    EZS3_S3_SECRET_KEY=minioadmin \
+    uv run pytest -m integration --no-cov
 
 [doc("Run tests for all supported Python versions.")]
 [group("dev")]
 tox:
     uv run tox
+
+# Local S3-compatible container (using MinIO server).
+
+[doc("Start a local MinIO container exposing the S3 API on :9000 and console on :9001.")]
+[group("s3-local")]
+s3-local-up:
+    docker run -d --rm \
+        --name ezs3-minio \
+        -p 9000:9000 \
+        -p 9001:9001 \
+        -e MINIO_ROOT_USER=minioadmin \
+        -e MINIO_ROOT_PASSWORD=minioadmin \
+        quay.io/minio/minio server /data --console-address ":9001"
+    @echo "MinIO ready at http://localhost:9000 (console: http://localhost:9001)"
+
+[doc("Stop the local MinIO container.")]
+[group("s3-local")]
+s3-local-down:
+    docker stop ezs3-minio
+
+[doc("Tail logs of the local MinIO container.")]
+[group("s3-local")]
+s3-local-logs:
+    docker logs -f ezs3-minio
+
+[doc("Show status of the local MinIO container.")]
+[group("s3-local")]
+s3-local-status:
+    @docker ps --filter name=ezs3-minio --format json | jq -r '.Names + " " + .Status' 2>/dev/null || docker ps --filter name=ezs3-minio
