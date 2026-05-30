@@ -40,6 +40,7 @@ from ._hashing import (
     parse_hash,
     supported_algorithms,
 )
+from ._managed import ManagedStore
 from ._path import Key, Prefix, S3Path
 
 __all__ = [
@@ -56,6 +57,7 @@ __all__ = [
     "IsAPrefixError",
     "IssueCode",
     "Key",
+    "ManagedStore",
     "NotAPrefixError",
     "PathNotAttachedError",
     "Prefix",

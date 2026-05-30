@@ -1,6 +1,6 @@
 [project]
 name = "ezs3"
-version = "1.0.0"
+version = "1.1.0"
 description = "Type-safe, Path-like S3 utilities built on top of boto3."
 keywords = ["aws", "amazon", "s3", "storage", "data", "download", "upload"]
 readme = { file = "README.md", content-type = "text/markdown" }
