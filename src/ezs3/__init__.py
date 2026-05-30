@@ -20,25 +20,41 @@ Quickstart:
 
 from ._bucket import Bucket
 from ._client import Client, get_default_client, reset_default_client
+from ._consistency import CheckResult, ConsistencyChecker, FileInfo, IssueCode
 from ._exceptions import (
     BucketAlreadyExistsError,
     BucketMismatchError,
     BucketNotFoundError,
+    HashMismatchError,
     IsAPrefixError,
     NotAPrefixError,
     PathNotAttachedError,
     S3Error,
     S3KeyNotFoundError,
 )
+from ._hashing import (
+    DEFAULT_ALG,
+    format_hash,
+    hash_bytes,
+    hash_stream,
+    parse_hash,
+    supported_algorithms,
+)
 from ._path import Key, Prefix, S3Path
 
 __all__ = [
+    "DEFAULT_ALG",
     "Bucket",
     "BucketAlreadyExistsError",
     "BucketMismatchError",
     "BucketNotFoundError",
+    "CheckResult",
     "Client",
+    "ConsistencyChecker",
+    "FileInfo",
+    "HashMismatchError",
     "IsAPrefixError",
+    "IssueCode",
     "Key",
     "NotAPrefixError",
     "PathNotAttachedError",
@@ -46,6 +62,11 @@ __all__ = [
     "S3Error",
     "S3KeyNotFoundError",
     "S3Path",
+    "format_hash",
     "get_default_client",
+    "hash_bytes",
+    "hash_stream",
+    "parse_hash",
     "reset_default_client",
+    "supported_algorithms",
 ]

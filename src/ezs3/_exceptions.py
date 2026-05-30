@@ -60,10 +60,20 @@ class BucketMismatchError(S3Error, ValueError):
     """
 
 
+class HashMismatchError(S3Error, ValueError):
+    """Raised when a content hash does not match the expected digest.
+
+    Used by hash-checking helpers that prefer raising over reporting via a
+    result record. The :class:`~ezs3.ConsistencyChecker` reports mismatches
+    as :class:`~ezs3.CheckResult` records by default rather than raising.
+    """
+
+
 __all__ = [
     "BucketAlreadyExistsError",
     "BucketMismatchError",
     "BucketNotFoundError",
+    "HashMismatchError",
     "IsAPrefixError",
     "NotAPrefixError",
     "PathNotAttachedError",
