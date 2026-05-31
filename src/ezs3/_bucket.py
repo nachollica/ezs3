@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     )
     from typing_extensions import Unpack
 
-    from ._path import S3Path
+    from ._path import LocalTarget, S3Path
 
 
 class Bucket:
@@ -233,6 +233,54 @@ class Bucket:
             The number of bytes written.
         """
         return self.path(key).write_text(data, encoding=encoding, **put_object_kwargs)
+
+    def download(
+        self,
+        src: Union[str, S3Path],
+        dest: LocalTarget,
+        *,
+        create_parents: bool = False,
+    ) -> int:
+        """Download ``src`` to a local file or binary stream.
+
+        Args:
+            src: Key to download, relative to this bucket. An
+                :class:`~ezs3.S3Path` attached to another bucket raises
+                :class:`~ezs3.BucketMismatchError`.
+            dest: Destination. See :meth:`S3Path.download`.
+            create_parents: When ``True`` and ``dest`` is a path, create
+                missing parent directories.
+
+        Returns:
+            Number of bytes written.
+        """
+        return self.path(src).download(dest, create_parents=create_parents)
+
+    def upload(
+        self,
+        src: LocalTarget,
+        dest: Union[str, S3Path],
+        *,
+        overwrite: bool = False,
+        **put_object_kwargs: Unpack[PutObjectKwargs],
+    ) -> int:
+        """Upload a local file or binary stream to ``dest``.
+
+        Args:
+            src: Source. See :meth:`S3Path.upload`.
+            dest: Destination key relative to this bucket. An
+                :class:`~ezs3.S3Path` attached to another bucket raises
+                :class:`~ezs3.BucketMismatchError`.
+            overwrite: When ``False`` (default), refuse to clobber an
+                existing key.
+            **put_object_kwargs: Forwarded to :meth:`S3Path.upload`.
+                Statically typed by
+                :class:`mypy_boto3_s3.type_defs.PutObjectRequestObjectPutTypeDef`.
+
+        Returns:
+            Number of bytes uploaded.
+        """
+        return self.path(dest).upload(src, overwrite=overwrite, **put_object_kwargs)
 
     def remove(
         self,

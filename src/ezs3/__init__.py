@@ -30,6 +30,7 @@ from ._exceptions import (
     NotAPrefixError,
     PathNotAttachedError,
     S3Error,
+    S3KeyExistsError,
     S3KeyNotFoundError,
 )
 from ._hashing import (
@@ -62,6 +63,7 @@ __all__ = [
     "PathNotAttachedError",
     "Prefix",
     "S3Error",
+    "S3KeyExistsError",
     "S3KeyNotFoundError",
     "S3Path",
     "format_hash",

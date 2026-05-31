@@ -13,7 +13,8 @@ for paths that have not been materialized yet.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Iterator, List, Optional, Set, Tuple, Union
+from pathlib import Path
+from typing import IO, TYPE_CHECKING, Iterator, List, Optional, Set, Tuple, Union
 
 from botocore.exceptions import ClientError
 
@@ -22,8 +23,17 @@ from ._exceptions import (
     IsAPrefixError,
     NotAPrefixError,
     PathNotAttachedError,
+    S3KeyExistsError,
     S3KeyNotFoundError,
 )
+
+#: Accepted destination for :meth:`S3Path.download` (or upload source).
+#:
+#: A ``str`` is interpreted as a filesystem path and coerced to
+#: :class:`pathlib.Path`. :class:`pathlib.Path` is opened in binary mode.
+#: Anything else must be a binary file-like object (e.g. :class:`io.BytesIO`
+#: or a file opened in ``"rb"``/``"wb"`` mode).
+LocalTarget = Union[str, Path, IO[bytes]]
 
 if TYPE_CHECKING:
     from mypy_boto3_s3.type_defs import (
@@ -459,6 +469,96 @@ class S3Path:
             PathNotAttachedError: See :meth:`write_bytes`.
         """
         return self.write_bytes(data.encode(encoding), **put_object_kwargs)
+
+    def download(
+        self,
+        dest: LocalTarget,
+        *,
+        create_parents: bool = False,
+    ) -> int:
+        """Download this key to a local file or binary stream.
+
+        The transfer is always byte-exact: text and binary payloads are
+        written verbatim. Decode afterwards if you need text (e.g. open the
+        downloaded :class:`~pathlib.Path` with ``encoding="utf-8"``).
+
+        Args:
+            dest: Destination. A :class:`str` is coerced to
+                :class:`pathlib.Path`. A :class:`~pathlib.Path` is created
+                (or truncated) and written in binary mode. Any other value
+                must implement ``write(bytes)`` (e.g. :class:`io.BytesIO` or
+                a file opened in ``"wb"``).
+            create_parents: When ``True`` and ``dest`` is a path, missing
+                parent directories are created (``mkdir -p`` semantics).
+                Ignored for stream destinations.
+
+        Returns:
+            Number of bytes written.
+
+        Raises:
+            IsAPrefixError: If this path is the bucket root or resolves to
+                a prefix.
+            S3KeyNotFoundError: If the key does not exist.
+            PathNotAttachedError: If the path has no attached bucket.
+            FileNotFoundError: If ``dest`` parent directory does not exist
+                and ``create_parents`` is ``False``.
+        """
+        data = self.read_bytes()
+        if isinstance(dest, str):
+            dest = Path(dest)
+        if isinstance(dest, Path):
+            if create_parents:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+        else:
+            dest.write(data)
+        return len(data)
+
+    def upload(
+        self,
+        src: LocalTarget,
+        *,
+        overwrite: bool = False,
+        **put_object_kwargs: Unpack[PutObjectKwargs],
+    ) -> int:
+        """Upload a local file or binary stream to this key.
+
+        The payload is uploaded byte-exact: encode text upstream if needed.
+
+        Args:
+            src: Source. A :class:`str` is coerced to :class:`pathlib.Path`
+                and read in binary mode (must exist). A
+                :class:`~pathlib.Path` is read in binary mode. Any other
+                value must implement ``read() -> bytes`` (e.g.
+                :class:`io.BytesIO` or a file opened in ``"rb"``).
+            overwrite: When ``False`` (the default), refuse to clobber an
+                existing key and raise :class:`~ezs3.S3KeyExistsError`.
+                When ``True``, replace silently.
+            **put_object_kwargs: Forwarded to :meth:`write_bytes`.
+                Statically typed by
+                :class:`mypy_boto3_s3.type_defs.PutObjectRequestObjectPutTypeDef`.
+
+        Returns:
+            Number of bytes uploaded.
+
+        Raises:
+            IsAPrefixError: If this path is the bucket root.
+            S3KeyExistsError: If the key already exists and ``overwrite`` is
+                ``False``.
+            FileNotFoundError: If ``src`` is a path that does not exist.
+            PathNotAttachedError: If the path has no attached bucket.
+        """
+        if isinstance(src, str):
+            src = Path(src)
+        if isinstance(src, Path):
+            data = src.read_bytes()
+        else:
+            data = src.read()
+        if not overwrite and self.is_key():
+            raise S3KeyExistsError(
+                f"Key already exists; pass overwrite=True to replace: {self!s}",
+            )
+        return self.write_bytes(data, **put_object_kwargs)
 
     # Listing / traversal
 

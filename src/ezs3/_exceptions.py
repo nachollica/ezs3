@@ -44,6 +44,14 @@ class BucketAlreadyExistsError(S3Error, FileExistsError):
     """
 
 
+class S3KeyExistsError(S3Error, FileExistsError):
+    """Raised when writing a key that already exists and overwrite is disabled.
+
+    Pass ``overwrite=True`` to :meth:`~ezs3.S3Path.upload` (or
+    :meth:`~ezs3.Bucket.upload`) to replace the existing object instead.
+    """
+
+
 class PathNotAttachedError(S3Error, ValueError):
     """Raised when an operation requires a bucket but the path is free.
 
@@ -78,5 +86,6 @@ __all__ = [
     "NotAPrefixError",
     "PathNotAttachedError",
     "S3Error",
+    "S3KeyExistsError",
     "S3KeyNotFoundError",
 ]

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from io import BytesIO
+from pathlib import Path
+
 import pytest
 
 from ezs3 import (
@@ -10,6 +13,7 @@ from ezs3 import (
     NotAPrefixError,
     PathNotAttachedError,
     Prefix,
+    S3KeyExistsError,
     S3KeyNotFoundError,
     S3Path,
 )
@@ -226,3 +230,191 @@ class TestSpecExample:
         attached = free.attach(bucket)
         assert attached.bucket == bucket
         assert attached.key == "project-name/some-prefix"
+
+
+# Sample bytes simulating a binary payload (e.g. a PDF header) used to prove
+# byte-exact round-trips for non-text content.
+_BIN_BLOB = b"%PDF-1.4\n\x00\x01\x02binary-payload\xff\xfe"
+_JSON_BLOB = b'{"hello": "w\xc3\xb6rld"}'  # utf-8 encoded text
+
+
+class TestDownload:
+    def test_download_to_path(self, bucket: Bucket, tmp_path: Path) -> None:
+        key = bucket / "doc.pdf"
+        key.write_bytes(_BIN_BLOB)
+        dest = tmp_path / "out.pdf"
+        n = key.download(dest)
+        assert n == len(_BIN_BLOB)
+        assert dest.read_bytes() == _BIN_BLOB
+
+    def test_download_to_str_path(self, bucket: Bucket, tmp_path: Path) -> None:
+        key = bucket / "doc.bin"
+        key.write_bytes(_BIN_BLOB)
+        dest = tmp_path / "out.bin"
+        key.download(str(dest))
+        assert dest.read_bytes() == _BIN_BLOB
+
+    def test_download_text_payload_is_byte_exact(self, bucket: Bucket, tmp_path: Path) -> None:
+        key = bucket / "data.json"
+        key.write_bytes(_JSON_BLOB)
+        dest = tmp_path / "data.json"
+        key.download(dest)
+        # readable as text after the fact
+        assert dest.read_text(encoding="utf-8") == '{"hello": "wörld"}'
+
+    def test_download_to_bytesio(self, bucket: Bucket) -> None:
+        key = bucket / "blob.bin"
+        key.write_bytes(_BIN_BLOB)
+        buf = BytesIO()
+        n = key.download(buf)
+        assert n == len(_BIN_BLOB)
+        assert buf.getvalue() == _BIN_BLOB
+
+    def test_download_create_parents(self, bucket: Bucket, tmp_path: Path) -> None:
+        key = bucket / "doc.bin"
+        key.write_bytes(_BIN_BLOB)
+        dest = tmp_path / "a" / "b" / "c" / "out.bin"
+        key.download(dest, create_parents=True)
+        assert dest.read_bytes() == _BIN_BLOB
+
+    def test_download_missing_parents_raises(self, bucket: Bucket, tmp_path: Path) -> None:
+        key = bucket / "doc.bin"
+        key.write_bytes(_BIN_BLOB)
+        dest = tmp_path / "missing" / "out.bin"
+        with pytest.raises(FileNotFoundError):
+            key.download(dest)
+
+    def test_download_missing_key_raises(self, bucket: Bucket, tmp_path: Path) -> None:
+        with pytest.raises(S3KeyNotFoundError):
+            (bucket / "ghost.bin").download(tmp_path / "out.bin")
+
+    def test_download_prefix_raises(self, populated_bucket: Bucket, tmp_path: Path) -> None:
+        with pytest.raises(IsAPrefixError):
+            (populated_bucket / "data").download(tmp_path / "out.bin")
+
+    def test_download_free_path_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(PathNotAttachedError):
+            S3Path("x").download(tmp_path / "out.bin")
+
+    def test_download_existing_file_overwrites(self, bucket: Bucket, tmp_path: Path) -> None:
+        key = bucket / "doc.bin"
+        key.write_bytes(_BIN_BLOB)
+        dest = tmp_path / "out.bin"
+        dest.write_bytes(b"stale")
+        key.download(dest)
+        assert dest.read_bytes() == _BIN_BLOB
+
+
+class TestUpload:
+    def test_upload_from_path(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.pdf"
+        src.write_bytes(_BIN_BLOB)
+        key = bucket / "doc.pdf"
+        n = key.upload(src)
+        assert n == len(_BIN_BLOB)
+        assert key.read_bytes() == _BIN_BLOB
+
+    def test_upload_from_str_path(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        key = bucket / "doc.bin"
+        key.upload(str(src))
+        assert key.read_bytes() == _BIN_BLOB
+
+    def test_upload_text_payload_is_byte_exact(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "data.json"
+        src.write_text('{"hello": "wörld"}', encoding="utf-8")
+        key = bucket / "data.json"
+        key.upload(src)
+        assert key.read_bytes() == _JSON_BLOB
+        assert key.read_text(encoding="utf-8") == '{"hello": "wörld"}'
+
+    def test_upload_from_bytesio(self, bucket: Bucket) -> None:
+        buf = BytesIO(_BIN_BLOB)
+        key = bucket / "blob.bin"
+        n = key.upload(buf)
+        assert n == len(_BIN_BLOB)
+        assert key.read_bytes() == _BIN_BLOB
+
+    def test_upload_missing_source_raises(self, bucket: Bucket, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            (bucket / "x.bin").upload(tmp_path / "missing.bin")
+
+    def test_upload_no_overwrite_raises(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        key = bucket / "doc.bin"
+        key.write_bytes(b"existing")
+        with pytest.raises(S3KeyExistsError):
+            key.upload(src)
+        # original payload untouched
+        assert key.read_bytes() == b"existing"
+
+    def test_upload_overwrite_true_replaces(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        key = bucket / "doc.bin"
+        key.write_bytes(b"existing")
+        key.upload(src, overwrite=True)
+        assert key.read_bytes() == _BIN_BLOB
+
+    def test_upload_to_root_raises(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        with pytest.raises(IsAPrefixError):
+            bucket.root.upload(src)
+
+    def test_upload_free_path_raises(self, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        with pytest.raises(PathNotAttachedError):
+            S3Path("x").upload(src)
+
+    def test_upload_forwards_put_object_kwargs(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.json"
+        src.write_bytes(b"{}")
+        key = bucket / "doc.json"
+        key.upload(src, ContentType="application/json")
+        head = bucket.client.boto_client.head_object(Bucket=bucket.name, Key=key.key)
+        assert head["ContentType"] == "application/json"
+
+
+class TestBucketDownloadUpload:
+    def test_bucket_download(self, bucket: Bucket, tmp_path: Path) -> None:
+        bucket.write_bytes("doc.bin", _BIN_BLOB)
+        dest = tmp_path / "out.bin"
+        n = bucket.download("doc.bin", dest)
+        assert n == len(_BIN_BLOB)
+        assert dest.read_bytes() == _BIN_BLOB
+
+    def test_bucket_download_create_parents(self, bucket: Bucket, tmp_path: Path) -> None:
+        bucket.write_bytes("doc.bin", _BIN_BLOB)
+        dest = tmp_path / "a" / "b" / "out.bin"
+        bucket.download("doc.bin", dest, create_parents=True)
+        assert dest.read_bytes() == _BIN_BLOB
+
+    def test_bucket_upload(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        bucket.upload(src, "doc.bin")
+        assert bucket.read_bytes("doc.bin") == _BIN_BLOB
+
+    def test_bucket_upload_no_overwrite_raises(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        bucket.write_bytes("doc.bin", b"existing")
+        with pytest.raises(S3KeyExistsError):
+            bucket.upload(src, "doc.bin")
+
+    def test_bucket_upload_overwrite_true(self, bucket: Bucket, tmp_path: Path) -> None:
+        src = tmp_path / "in.bin"
+        src.write_bytes(_BIN_BLOB)
+        bucket.write_bytes("doc.bin", b"existing")
+        bucket.upload(src, "doc.bin", overwrite=True)
+        assert bucket.read_bytes("doc.bin") == _BIN_BLOB
+
+    def test_bucket_download_with_s3path(self, bucket: Bucket, tmp_path: Path) -> None:
+        bucket.write_bytes("doc.bin", _BIN_BLOB)
+        dest = tmp_path / "out.bin"
+        bucket.download(bucket / "doc.bin", dest)
+        assert dest.read_bytes() == _BIN_BLOB
