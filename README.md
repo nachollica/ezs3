@@ -1,5 +1,9 @@
 # ezs3
 
+[![PyPI](https://img.shields.io/pypi/v/ezs3.svg)](https://pypi.org/project/ezs3/)
+[![Python](https://img.shields.io/pypi/pyversions/ezs3.svg)](https://pypi.org/project/ezs3/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/nachollica/ezs3/blob/master/LICENSE)
+
 A typed, **Path-like** abstraction over [boto3](https://pypi.org/project/boto3/)
 for working with Amazon S3. Treat keys and prefixes the same way you treat
 `pathlib.Path` objects — slash to compose, `read_text`/`write_text` to do I/O,
@@ -23,7 +27,6 @@ for path in bucket.rglob("*.json"):
 - [Exceptions](#exceptions)
 - [Requirements](#requirements)
 - [Development](#development)
-- [License](#license)
 
 ## Installation
 
@@ -46,111 +49,88 @@ dev dependency group.
 
 Credentials follow the standard boto3 resolution chain: environment variables,
 `~/.aws/credentials`, instance role, etc. Override per-client when needed
-(see [Custom endpoint](#custom-endpoint-minio--localstack)).
+(see [Authentication in USAGE.md](USAGE.md#12-authentication)).
 
 ## Usage
 
-### Clients and buckets
+These snippets show the most common interfaces. See [USAGE.md](USAGE.md) for a detailed guide with more examples and features.
+
+### Paths and I/O
 
 ```python
 import ezs3
 
-client = ezs3.Client()                       # default credentials
-buckets = client.list_buckets()              # list[ezs3.Bucket]
+# Implicit default client; or build one with explicit credentials.
+bucket = ezs3.Bucket("my-bucket")
 
-# Create / delete buckets (requires permission).
-tmp = client.create_bucket("ezs3-tmp")
-client.delete_bucket(tmp, force=True)        # force=True empties first
+# Compose with `/` just like pathlib.
+key = bucket / "reports" / "today.json"
 
-# Reach an existing bucket without listing.
-bucket = client.bucket("my-bucket")          # local handle (no API call)
-bucket = ezs3.Bucket("my-bucket")            # equivalent, uses default client
-```
+# In-memory I/O.
+key.write_text('{"ok": true}')
+data = key.read_text()
 
-### Path composition
+# Existence and classification.
+key.exists()                 # key OR prefix exists at this path
+key.is_key()                 # key only (alias: is_file)
+key.is_prefix()              # prefix only (alias: is_dir)
 
-Slash composes paths the same way as `pathlib.Path`. The result is an
-`ezs3.S3Path` (also exported as `ezs3.Prefix` and `ezs3.Key`):
-
-```python
-prefix = bucket / "project" / "raw"
-assert str(prefix) == "s3://my-bucket/project/raw"
-
-key = prefix / "events.json"
-assert key.name == "events.json"
-assert key.suffix == ".json"
-assert key.parent == prefix
-```
-
-`S3Path` may also be constructed directly. *Free* paths are not attached to any
-bucket; attach them later when you know where they belong:
-
-```python
-free = ezs3.Prefix("project/raw")            # bucket is None
-attached = free.attach(bucket)               # now bound
-
-# Other equivalent forms:
-ezs3.Prefix(bucket, "project/raw")
-ezs3.Prefix("my-bucket", "project/raw")
-ezs3.Prefix("s3://my-bucket/project/raw")
-```
-
-### Reading and writing
-
-```python
-key = bucket / "config.json"
-key.write_text('{"flag": true}')
-key.write_bytes(b"\x00\x01\x02")
-
-key.read_text()            # -> str
-key.read_bytes()           # -> bytes
-
-bucket.write_text("hello.txt", "hi")   # bucket-level shortcut
-bucket.read_text("hello.txt")
-```
-
-### Existence checks
-
-```python
-key.exists()       # True if either a key or a prefix exists at this path
-key.is_key()       # True only if a key exists (== is_file alias)
-key.is_prefix()    # True if any object exists under this prefix (== is_dir alias)
-```
-
-### Listing and globbing
-
-```python
-for child in (bucket / "data").iterdir():    # one level deep
-    print(child)
-
-for path in (bucket / "data").find():        # recursive, every key
+# Listing / globbing on a prefix.
+for path in (bucket / "data").rglob("*.json"):
     print(path)
 
-for path in bucket.glob("*.json", prefix="data"):     # one level
-    ...
-
-for path in bucket.rglob("*.json", prefix="data"):    # recursive
-    ...
+# Deletion.
+key.remove()                 # one key (alias: rm)
+(bucket / "tmp").rmtree()    # recursive
 ```
 
-### Deletion
+### Working with `Client`
+
+`Client` wraps a boto3 session and owns bucket lifecycle. Build one
+explicitly when you need a custom endpoint (MinIO, LocalStack, R2...),
+non-default credentials, or to target several accounts in the same
+process. Bucket-lifecycle calls can fail with the underlying
+`botocore.exceptions.ClientError` when the IAM identity lacks
+permission — catch it alongside the ezs3-specific errors:
 
 ```python
-key.remove()                # delete a single key (== rm alias)
-prefix.rmtree()             # recursive delete
-bucket.remove("a.txt", "b.txt", "c.txt")   # batched DeleteObjects
-bucket.clear()              # empty the bucket
-```
+import ezs3
+from botocore.exceptions import ClientError
 
-### Custom endpoint (MinIO / LocalStack)
-
-```python
 client = ezs3.Client(
-    endpoint_url="http://localhost:9000",
+    endpoint_url="http://localhost:9000",  # omit for real AWS
     aws_access_key_id="minioadmin",
     aws_secret_access_key="minioadmin",
     region_name="us-east-1",
 )
+
+# Get or create a Bucket called "ezs3-reports",
+# raise if not allowed.
+try:
+    bucket = client.create_bucket("ezs3-reports")
+except ezs3.BucketAlreadyExistsError:
+    bucket = client.bucket("ezs3-reports")
+except ClientError as exc:
+    code = exc.response.get("Error", {}).get("Code", "")
+    if code in ("AccessDenied", "AllAccessDisabled"):
+        raise SystemExit("Missing permissions to read/create Buckets")
+```
+
+### Content-addressed uploads with `ManagedStore`
+
+`ManagedStore` is a thin layer on top of a `Bucket` that stores every
+blob at `<base_prefix>/<alg>:<digest>`. Two callers uploading the same
+bytes land on the same key — free deduplication. The store echoes back
+a `FileInfo` you can persist in your own database row:
+
+```python
+store = ezs3.ManagedStore(client, bucket, base_prefix="blobs/")
+
+info = store.put_bytes(b"hello world", content_type="text/plain")
+# info.hash == "sha256:b94d27b9934d3e08..."
+
+assert store.get_bytes(info.hash) == b"hello world"
+assert store.verify(info).ok
 ```
 
 ## API at a glance
@@ -161,6 +141,10 @@ client = ezs3.Client(
 | `ezs3.Bucket` | Named bucket handle. Supports `/` and path-style helpers. |
 | `ezs3.S3Path` | Path-like representation of a key or prefix. |
 | `ezs3.Prefix`, `ezs3.Key` | Aliases for `S3Path`. Use whichever documents intent best. |
+| `ezs3.ManagedStore` | Content-addressed blob store on top of a bucket. Byte-identical uploads dedup automatically. |
+| `ezs3.ConsistencyChecker` | Cross-validate S3 contents against caller-supplied `FileInfo` metadata. |
+| `ezs3.FileInfo` | Dataclass: `filename`, `size`, `content_type`, `hash`. Mirrors FastAPI's `UploadFile`. |
+| `ezs3.hash_bytes`, `ezs3.hash_stream` | Stdlib `hashlib` wrappers returning `"<alg>:<hex-digest>"`. |
 
 Full API reference is auto-generated from docstrings — see
 [Building the docs](#building-the-docs).
@@ -177,8 +161,10 @@ the closest stdlib equivalent, so you can catch either:
 | `S3KeyNotFoundError` | `FileNotFoundError` |
 | `BucketNotFoundError` | `FileNotFoundError` |
 | `BucketAlreadyExistsError` | `FileExistsError` |
+| `S3KeyExistsError` | `FileExistsError` |
 | `PathNotAttachedError` | `ValueError` |
 | `BucketMismatchError` | `ValueError` |
+| `HashMismatchError` | `ValueError` |
 
 ```python
 try:
@@ -191,6 +177,9 @@ try:
 except ezs3.NotAPrefixError:
     ...
 ```
+
+See [Error handling in USAGE.md](USAGE.md#3-error-handling) for full
+recipes and the rationale for exceptions vs result records.
 
 ---
 
@@ -223,12 +212,9 @@ uv sync --all-groups
 ### Running checks
 
 ```bash
-just cc                  # lint + typecheck + unit tests
-just lint                # ruff check
-just tc                  # mypy
-just test [unit]         # pytest (unit, excludes integration marker)
-just fix                 # ruff format + autofix
-just test tox            # run the test suite under every supported Python
+just cc          # same as running `just lint tc test` (lint + typecheck + unit tests)
+just fix         # ruff format + autofix
+just test tox    # run the test suite under every supported Python
 ```
 
 ### Integration tests against MinIO
@@ -259,7 +245,3 @@ just docs clean      # rm -rf site/
 just build         # uv build (wheel + sdist in dist/)
 just publish       # uv publish (requires UV_PUBLISH_TOKEN)
 ```
-
-## License
-
-[MIT](https://github.com/nachollica/ezs3/blob/master/LICENSE).
