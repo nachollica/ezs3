@@ -59,7 +59,9 @@ class TestPutBytes:
         assert info.filename == info.hash
 
     def test_dedup_same_content_single_key(
-        self, store: ManagedStore, bucket: Bucket,
+        self,
+        store: ManagedStore,
+        bucket: Bucket,
     ) -> None:
         store.put_bytes(b"same", filename="first.txt")
         store.put_bytes(b"same", filename="second.txt")
@@ -146,7 +148,9 @@ class TestVerify:
         assert result.ok
 
     def test_hash_mismatch_after_overwrite(
-        self, store: ManagedStore, bucket: Bucket,
+        self,
+        store: ManagedStore,
+        bucket: Bucket,
     ) -> None:
         info = store.put_bytes(b"original")
         # Force a corruption via raw boto3 — only valid in this test.

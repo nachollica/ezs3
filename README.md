@@ -31,6 +31,19 @@ for path in bucket.rglob("*.json"):
 pip install ezs3
 ```
 
+For full IDE autocomplete and static type-checking on boto3-derived kwargs
+(`Unpack[...]` typed dicts, client responses, etc.), install the optional
+`types` extra. It pulls in
+[`boto3-stubs[s3]`](https://pypi.org/project/boto3-stubs/) so that the symbols
+ezs3 references under `TYPE_CHECKING` resolve in the user's environment:
+
+```bash
+pip install "ezs3[types]"
+```
+
+Stubs are a type-check-time concern, so most projects only need them in their
+dev dependency group.
+
 Credentials follow the standard boto3 resolution chain: environment variables,
 `~/.aws/credentials`, instance role, etc. Override per-client when needed
 (see [Custom endpoint](#custom-endpoint-minio--localstack)).
@@ -210,12 +223,12 @@ uv sync --all-groups
 ### Running checks
 
 ```bash
-just cc            # lint + typecheck + unit tests
-just lint          # ruff check
-just tc            # mypy
-just test          # pytest (unit, excludes integration marker)
-just fix           # ruff format + autofix
-just tox           # run the test suite under every supported Python
+just cc                  # lint + typecheck + unit tests
+just lint                # ruff check
+just tc                  # mypy
+just test [unit]         # pytest (unit, excludes integration marker)
+just fix                 # ruff format + autofix
+just test tox            # run the test suite under every supported Python
 ```
 
 ### Integration tests against MinIO
@@ -224,9 +237,9 @@ A local S3-compatible service is needed for the `integration` test marker.
 This project bundles MinIO via Docker:
 
 ```bash
-just s3-local-up           # start MinIO on :9000 (console :9001)
-just test-integration      # run pytest -m integration
-just s3-local-down         # stop the container
+just s3-local up           # start MinIO on :9000 (console :9001)
+just test integration      # run pytest -m integration
+just s3-local down         # stop the container
 ```
 
 ### Building the docs
@@ -235,9 +248,9 @@ API documentation is generated from Google-style docstrings using
 [**pdoc**](https://pdoc.dev):
 
 ```bash
-just docs          # build into ./site/
-just docs-serve    # serve with live reload at http://localhost:8080
-just docs-clean    # rm -rf site/
+just docs [build]    # build into ./site/
+just docs serve      # serve with live reload at http://localhost:8080
+just docs clean      # rm -rf site/
 ```
 
 ### Releasing

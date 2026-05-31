@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Union
+from typing import TYPE_CHECKING, Iterator, List, Optional, Union
 
 from ._client import Client, get_default_client
 
 if TYPE_CHECKING:
+    from mypy_boto3_s3.type_defs import (
+        CreateBucketRequestBucketCreateTypeDef as CreateBucketKwargs,
+    )
     from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
+    from mypy_boto3_s3.type_defs import (
+        PutObjectRequestObjectPutTypeDef as PutObjectKwargs,
+    )
+    from typing_extensions import Unpack
 
     from ._path import S3Path
 
@@ -92,14 +99,20 @@ class Bucket:
         """
         return self._client.bucket_exists(self.name)
 
-    def create(self, *, exists_ok: bool = False, **extra: Any) -> Bucket:
+    def create(
+        self,
+        *,
+        exists_ok: bool = False,
+        **extra: Unpack[CreateBucketKwargs],
+    ) -> Bucket:
         """Create this bucket on the remote service.
 
         Args:
             exists_ok: When ``True``, suppress
                 :class:`~ezs3.BucketAlreadyExistsError`.
             **extra: Additional kwargs forwarded to
-                :meth:`Client.create_bucket`.
+                :meth:`Client.create_bucket`. Statically typed by
+                :class:`mypy_boto3_s3.type_defs.CreateBucketRequestBucketCreateTypeDef`.
 
         Returns:
             This :class:`Bucket` (for chaining).
@@ -179,23 +192,32 @@ class Bucket:
         """
         return self.path(key).read_text(encoding=encoding)
 
-    def write_bytes(self, key: Union[str, S3Path], data: bytes) -> int:
+    def write_bytes(
+        self,
+        key: Union[str, S3Path],
+        data: bytes,
+        **put_object_kwargs: Unpack[PutObjectKwargs],
+    ) -> int:
         """Write ``data`` to ``key`` as raw bytes.
 
         Args:
             key: Destination key relative to this bucket.
             data: Payload to upload.
+            **put_object_kwargs: Forwarded to
+                :meth:`S3Path.write_bytes`. Statically typed by
+                :class:`mypy_boto3_s3.type_defs.PutObjectRequestObjectPutTypeDef`.
 
         Returns:
             The number of bytes written.
         """
-        return self.path(key).write_bytes(data)
+        return self.path(key).write_bytes(data, **put_object_kwargs)
 
     def write_text(
         self,
         key: Union[str, S3Path],
         data: str,
         encoding: str = "utf-8",
+        **put_object_kwargs: Unpack[PutObjectKwargs],
     ) -> int:
         """Write ``data`` to ``key`` as encoded text.
 
@@ -203,11 +225,14 @@ class Bucket:
             key: Destination key relative to this bucket.
             data: Unicode payload to upload.
             encoding: Codec used to encode ``data``.
+            **put_object_kwargs: Forwarded to
+                :meth:`S3Path.write_text`. Statically typed by
+                :class:`mypy_boto3_s3.type_defs.PutObjectRequestObjectPutTypeDef`.
 
         Returns:
             The number of bytes written.
         """
-        return self.path(key).write_text(data, encoding=encoding)
+        return self.path(key).write_text(data, encoding=encoding, **put_object_kwargs)
 
     def remove(
         self,

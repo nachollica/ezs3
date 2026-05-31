@@ -23,6 +23,11 @@ dependencies = [
     "botocore>=1.37.38",
 ]
 
+[project.optional-dependencies]
+types = [
+    "boto3-stubs[s3]>=1.37.0",
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.1",
@@ -32,7 +37,6 @@ dev = [
     "tox>=4.25.0",
     "ipython>=8.12.3",
     "moto[s3]>=5.0.0",
-    "boto3-stubs[s3]>=1.37.0",
     "pdoc>=15.0.0",
 ]
 
@@ -126,7 +130,16 @@ select = [
     "N",        # PEP 8 naming conventions
     "S",        # Security checks (bandit)
     "T",        # Disallow `print`/`pdb`/`breakpoint` calls
+    "W",        # pycodestyle warnings
+    "C4",       # Encourage idiomatic comprehensions
+    "BLE",      # Disallow blind `except:` clauses
+    "FURB",     # Modernize legacy patterns (refurb)
     "INP",      # Disallow implicit namespace packages (require __init__.py)
+    "ISC",      # Detect implicit string concatenation issues
+    "PGH",      # Miscellaneous pygrep-hooks (noqa hygiene, etc.)
+    "PIE",      # Miscellaneous lints (flake8-pie)
+    "RSE",      # Style for `raise` statements
+    "TCH",      # Move type-only imports into `TYPE_CHECKING` blocks
 ]
 ignore = [
     "E731",     # Lambda assignment instead of `def`
@@ -142,7 +155,7 @@ ignore = [
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"src/tests/*" = ["S", "INP001", "D"]
+"src/tests/*" = ["D", "S", "INP001", "TC003"]
 "src/ezs3/_exceptions.py" = ["D101"]  # exception classes are self-documenting
 
 [tool.mypy]

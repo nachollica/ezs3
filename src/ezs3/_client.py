@@ -8,7 +8,7 @@ with typed :class:`~ezs3.Bucket` handles.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union, cast
 
 import boto3
 from botocore.exceptions import ClientError
@@ -20,8 +20,15 @@ from ._exceptions import (
 )
 
 if TYPE_CHECKING:
+    from botocore.config import Config
     from mypy_boto3_s3.client import S3Client
+    from mypy_boto3_s3.literals import BucketLocationConstraintType
     from mypy_boto3_s3.service_resource import S3ServiceResource
+    from mypy_boto3_s3.type_defs import (
+        CreateBucketRequestBucketCreateTypeDef as CreateBucketKwargs,
+    )
+    from mypy_boto3_s3.type_defs import CreateBucketRequestTypeDef
+    from typing_extensions import Unpack
 
     from ._bucket import Bucket
 
@@ -80,7 +87,10 @@ class Client:
         aws_session_token: Optional[str] = None,
         profile_name: Optional[str] = None,
         session: Optional[boto3.session.Session] = None,
-        **boto3_kwargs: Any,
+        config: Optional[Config] = None,
+        api_version: Optional[str] = None,
+        use_ssl: Optional[bool] = None,
+        verify: Optional[Union[bool, str]] = None,
     ) -> None:
         """Initialize a new :class:`Client`.
 
@@ -95,8 +105,15 @@ class Client:
             profile_name: Named profile from ``~/.aws/credentials``.
             session: Pre-built ``boto3.session.Session``. When provided, the
                 credential/region kwargs above are ignored.
-            **boto3_kwargs: Forwarded to ``session.client("s3", ...)`` and
-                ``session.resource("s3", ...)``.
+            config: Optional ``botocore.config.Config`` forwarded to both
+                ``session.client("s3", ...)`` and ``session.resource("s3", ...)``.
+            api_version: Pin a specific S3 API version. Defaults to the
+                latest known to the installed ``botocore``.
+            use_ssl: Whether to use TLS when talking to the endpoint.
+                Defaults to ``True`` inside boto3.
+            verify: TLS verification flag. ``True``/``False`` toggles
+                verification; a string is interpreted as a path to a CA
+                bundle.
         """
         if session is None:
             session = boto3.session.Session(
@@ -108,14 +125,24 @@ class Client:
             )
         self._session = session
 
-        client_kwargs: dict = dict(boto3_kwargs)
-        if endpoint_url is not None:
-            client_kwargs["endpoint_url"] = endpoint_url
-        if region_name is not None:
-            client_kwargs.setdefault("region_name", region_name)
-
-        self._boto_client: S3Client = session.client("s3", **client_kwargs)
-        self._resource: S3ServiceResource = session.resource("s3", **client_kwargs)
+        self._boto_client: S3Client = session.client(
+            "s3",
+            region_name=region_name,
+            api_version=api_version,
+            use_ssl=use_ssl if use_ssl is not None else True,
+            verify=verify,
+            endpoint_url=endpoint_url,
+            config=config,
+        )
+        self._resource: S3ServiceResource = session.resource(
+            "s3",
+            region_name=region_name,
+            api_version=api_version,
+            use_ssl=use_ssl if use_ssl is not None else True,
+            verify=verify,
+            endpoint_url=endpoint_url,
+            config=config,
+        )
 
     @property
     def boto_client(self) -> S3Client:
@@ -204,7 +231,7 @@ class Client:
         *,
         region: Optional[str] = None,
         exists_ok: bool = False,
-        **extra: Any,
+        **extra: Unpack[CreateBucketKwargs],
     ) -> Bucket:
         """Create a bucket and return its :class:`~ezs3.Bucket` handle.
 
@@ -220,7 +247,10 @@ class Client:
                 :class:`~ezs3.BucketAlreadyExistsError` and return a handle to
                 the pre-existing bucket.
             **extra: Additional kwargs forwarded to the underlying
-                ``boto_client.create_bucket`` call.
+                ``boto_client.create_bucket`` call. Statically typed by
+                ``mypy_boto3_s3.type_defs.CreateBucketRequestBucketCreateTypeDef``
+                -- the resource-method variant that omits ``Bucket``
+                (filled from ``name``).
 
         Returns:
             A :class:`~ezs3.Bucket` handle pointing at the newly created (or
@@ -234,12 +264,17 @@ class Client:
         from ._bucket import Bucket
 
         bucket_name = name.name if isinstance(name, Bucket) else name
-        params: dict = {"Bucket": bucket_name, **extra}
+        params: CreateBucketRequestTypeDef = {"Bucket": bucket_name, **extra}
         effective_region = region or self.region_name
         if effective_region and effective_region != "us-east-1":
             params.setdefault(
                 "CreateBucketConfiguration",
-                {"LocationConstraint": effective_region},
+                {
+                    "LocationConstraint": cast(
+                        "BucketLocationConstraintType",
+                        effective_region,
+                    ),
+                },
             )
         try:
             self._boto_client.create_bucket(**params)

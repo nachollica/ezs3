@@ -855,9 +855,13 @@ dependencies = [
     { name = "botocore", version = "1.43.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
 
+[package.optional-dependencies]
+types = [
+    { name = "boto3-stubs", extra = ["s3"] },
+]
+
 [package.dev-dependencies]
 dev = [
-    { name = "boto3-stubs", extra = ["s3"] },
     { name = "ipython", version = "8.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
     { name = "ipython", version = "9.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -878,12 +882,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.37.38" },
+    { name = "boto3-stubs", extras = ["s3"], marker = "extra == 'types'", specifier = ">=1.37.0" },
     { name = "botocore", specifier = ">=1.37.38" },
 ]
+provides-extras = ["types"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "boto3-stubs", extras = ["s3"], specifier = ">=1.37.0" },
     { name = "ipython", specifier = ">=8.12.3" },
     { name = "moto", extras = ["s3"], specifier = ">=5.0.0" },
     { name = "mypy", specifier = ">=1.14.1" },

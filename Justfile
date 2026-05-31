@@ -5,6 +5,10 @@
 help:
     @just --list
 
+[doc("Set up local environment for development.")]
+init:
+    uv sync --dev --extra=types
+
 # Build and release
 
 [doc("Prepare wheel in `dist` directory.")]
@@ -28,7 +32,7 @@ publish index="test-pypi":
 
 [doc("Run all code checks.")]
 [group("dev")]
-cc: lint tc test
+cc: lint tc (test "unit")
 
 [doc("Autofix and lint Python code.")]
 [group("dev")]
@@ -46,45 +50,57 @@ lint:
 tc:
     uv run mypy ./src
 
-[doc("Run unit tests under `src/tests/` (excludes integration).")]
+[doc("Test recipes: `just test <unit|integration|tox>` (default: unit).")]
 [group("dev")]
-test:
+test cmd="unit":
+    @just test-{{cmd}}
+
+[private]
+test-unit:
     uv run pytest
 
-[doc("Run integration tests against the local S3 container. Requires `just s3-local-up`.")]
-[group("dev")]
+[private]
 test-integration:
     EZS3_S3_ENDPOINT_URL=http://localhost:9000 \
     EZS3_S3_ACCESS_KEY=minioadmin \
     EZS3_S3_SECRET_KEY=minioadmin \
     uv run pytest -m integration --no-cov
 
-[doc("Run tests for all supported Python versions.")]
-[group("dev")]
-tox:
+[private]
+test-tox:
     uv run tox
 
 # Documentation
 
-[doc("Build HTML API docs into `site/`.")]
+[doc("Docs recipes: `just docs <build|serve|clean>` (default: build).")]
 [group("docs")]
-docs:
+docs cmd="build":
+    @just docs-{{cmd}}
+
+[private]
+docs-build:
     uv run pdoc ezs3 --docformat google --output-directory site
 
-[doc("Serve API docs with hot-reload at http://localhost:8080.")]
-[group("docs")]
+[private]
 docs-serve:
     uv run pdoc ezs3 --docformat google --host localhost --port 8080
 
-[doc("Remove generated docs.")]
-[group("docs")]
+[private]
 docs-clean:
     rm -rf site/
 
 # Local S3-compatible container (using MinIO server).
 
-[doc("Start a local MinIO container exposing the S3 API on :9000 and console on :9001.")]
+[doc("Local MinIO container: `just s3-local <up|down|logs|status>` (default: status).")]
 [group("s3-local")]
+s3-local cmd="status":
+    @just s3-local-{{cmd}}
+
+[private]
+s3-local-status:
+    @docker ps --filter name=ezs3-minio --format json | jq -r '.Names + " " + .Status' 2>/dev/null || docker ps --filter name=ezs3-minio
+
+[private]
 s3-local-up:
     docker run -d --rm \
         --name ezs3-minio \
@@ -95,17 +111,10 @@ s3-local-up:
         quay.io/minio/minio server /data --console-address ":9001"
     @echo "MinIO ready at http://localhost:9000 (console: http://localhost:9001)"
 
-[doc("Stop the local MinIO container.")]
-[group("s3-local")]
+[private]
 s3-local-down:
     docker stop ezs3-minio
 
-[doc("Tail logs of the local MinIO container.")]
-[group("s3-local")]
+[private]
 s3-local-logs:
     docker logs -f ezs3-minio
-
-[doc("Show status of the local MinIO container.")]
-[group("s3-local")]
-s3-local-status:
-    @docker ps --filter name=ezs3-minio --format json | jq -r '.Names + " " + .Status' 2>/dev/null || docker ps --filter name=ezs3-minio

@@ -53,6 +53,10 @@ from ._hashing import (
 )
 
 if TYPE_CHECKING:
+    from mypy_boto3_s3.type_defs import (
+        PutObjectRequestObjectPutTypeDef as PutObjectKwargs,
+    )
+
     from ._client import Client
 
 
@@ -193,7 +197,7 @@ class ManagedStore:
         key = self._key_for(h)
         path = self._bucket.path(key)
         if not path.is_key():
-            put_kwargs: dict = {}
+            put_kwargs: PutObjectKwargs = {}
             if content_type is not None:
                 put_kwargs["ContentType"] = content_type
             path.write_bytes(data, **put_kwargs)
@@ -251,10 +255,19 @@ class ManagedStore:
             path = self._bucket.path(key)
             if not path.is_key():
                 tmp.seek(0)
-                put_kwargs: dict = {"Bucket": self._bucket.name, "Key": key, "Body": tmp}
                 if content_type is not None:
-                    put_kwargs["ContentType"] = content_type
-                self._client.boto_client.put_object(**put_kwargs)
+                    self._client.boto_client.put_object(
+                        Bucket=self._bucket.name,
+                        Key=key,
+                        Body=tmp,
+                        ContentType=content_type,
+                    )
+                else:
+                    self._client.boto_client.put_object(
+                        Bucket=self._bucket.name,
+                        Key=key,
+                        Body=tmp,
+                    )
         return FileInfo(
             filename=filename if filename is not None else h,
             size=size,
@@ -308,7 +321,7 @@ class ManagedStore:
             raise S3KeyNotFoundError(
                 f"No managed blob at s3://{self._bucket.name}/{key}",
             ) from exc
-        return cast(BinaryIO, obj["Body"])
+        return cast("BinaryIO", obj["Body"])
 
     def exists(self, info_or_hash: Union[FileInfo, str]) -> bool:
         """Return ``True`` if a blob is present for the given hash."""
@@ -360,7 +373,7 @@ class ManagedStore:
             Bucket=self._bucket.name,
             Key=key,
         )
-        actual = hash_stream(cast(BinaryIO, obj["Body"]), alg)
+        actual = hash_stream(cast("BinaryIO", obj["Body"]), alg)
         _, actual_digest = parse_hash(actual)
         if actual_digest != expected_digest:
             return CheckResult(

@@ -13,7 +13,7 @@ for paths that have not been materialized yet.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Iterator, List, Optional, Set, Tuple, Union
 
 from botocore.exceptions import ClientError
 
@@ -26,7 +26,15 @@ from ._exceptions import (
 )
 
 if TYPE_CHECKING:
-    from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
+    from mypy_boto3_s3.type_defs import (
+        ListObjectsV2RequestPaginateTypeDef,
+        ObjectIdentifierTypeDef,
+        PutObjectRequestTypeDef,
+    )
+    from mypy_boto3_s3.type_defs import (
+        PutObjectRequestObjectPutTypeDef as PutObjectKwargs,
+    )
+    from typing_extensions import Unpack
 
     from ._bucket import Bucket
 
@@ -392,14 +400,22 @@ class S3Path:
         """
         return self.read_bytes().decode(encoding)
 
-    def write_bytes(self, data: bytes, **put_object_kwargs: object) -> int:
+    def write_bytes(
+        self,
+        data: bytes,
+        **put_object_kwargs: Unpack[PutObjectKwargs],
+    ) -> int:
         """Upload ``data`` to this key.
 
         Args:
             data: Raw bytes to upload as the object body.
             **put_object_kwargs: Additional kwargs forwarded to
                 ``boto_client.put_object`` (e.g. ``ContentType``,
-                ``Metadata``).
+                ``Metadata``). Statically typed by
+                :class:`mypy_boto3_s3.type_defs.PutObjectRequestObjectPutTypeDef`. ``Bucket`` and
+                ``Key`` are filled by ezs3 and absent from the TypedDict;
+                ``Body`` may technically appear but will be overridden
+                by ``data``.
 
         Returns:
             The number of bytes written.
@@ -411,19 +427,20 @@ class S3Path:
         bucket = self._require_bucket()
         if not self._parts:
             raise IsAPrefixError(f"Cannot write to bucket root: {self!s}")
-        bucket.client.boto_client.put_object(
-            Bucket=bucket.name,
-            Key=self.key,
-            Body=data,
-            **put_object_kwargs,  # type: ignore[arg-type]
-        )
+        params: PutObjectRequestTypeDef = {
+            **put_object_kwargs,
+            "Bucket": bucket.name,
+            "Key": self.key,
+            "Body": data,
+        }
+        bucket.client.boto_client.put_object(**params)
         return len(data)
 
     def write_text(
         self,
         data: str,
         encoding: str = "utf-8",
-        **put_object_kwargs: object,
+        **put_object_kwargs: Unpack[PutObjectKwargs],
     ) -> int:
         """Encode and upload ``data`` to this key.
 
@@ -431,6 +448,8 @@ class S3Path:
             data: Unicode payload to upload.
             encoding: Codec used to encode ``data``.
             **put_object_kwargs: Forwarded to :meth:`write_bytes`.
+                Statically typed by
+                :class:`mypy_boto3_s3.type_defs.PutObjectRequestObjectPutTypeDef`.
 
         Returns:
             The number of bytes written.
@@ -464,7 +483,7 @@ class S3Path:
         if prefix and not prefix.endswith("/"):
             prefix += "/"
         paginator = bucket.client.boto_client.get_paginator("list_objects_v2")
-        seen: set = set()
+        seen: Set[str] = set()
         for page in paginator.paginate(
             Bucket=bucket.name,
             Prefix=prefix,
@@ -559,11 +578,14 @@ class S3Path:
         regex = _glob_to_regex(pattern)
 
         paginator = bucket.client.boto_client.get_paginator("list_objects_v2")
-        paginate_kwargs: dict = {"Bucket": bucket.name, "Prefix": full_prefix}
+        paginate_kwargs: ListObjectsV2RequestPaginateTypeDef = {
+            "Bucket": bucket.name,
+            "Prefix": full_prefix,
+        }
         if not recursive:
             paginate_kwargs["Delimiter"] = "/"
 
-        seen: set = set()
+        seen: Set[str] = set()
         for page in paginator.paginate(**paginate_kwargs):
             for obj in page.get("Contents") or []:
                 key = obj["Key"]
