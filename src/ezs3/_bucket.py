@@ -15,10 +15,12 @@ if TYPE_CHECKING:
 class Bucket:
     """Handle on a named S3 bucket bound to a :class:`~ezs3.Client`.
 
-    A :class:`Bucket` is identified solely by its name; equality and hashing
-    ignore the bound client, so the same bucket reached through different
-    clients compares equal. The slash operator returns an
-    :class:`~ezs3.S3Path` attached to this bucket:
+    A :class:`Bucket` is identified by the pair *(name, client)*: two handles
+    are equal only when their names match **and** their bound clients compare
+    equal. The same bucket name reached through clients backed by different
+    credentials is therefore treated as a different handle, since the two
+    clients may carry different IAM permissions. The slash operator returns
+    an :class:`~ezs3.S3Path` attached to this bucket:
 
     Example:
         >>> import ezs3
@@ -56,10 +58,10 @@ class Bucket:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Bucket):
             return NotImplemented
-        return self.name == other.name
+        return self.name == other.name and self._client == other._client
 
     def __hash__(self) -> int:
-        return hash(("ezs3.Bucket", self.name))
+        return hash(("ezs3.Bucket", self.name, self._client))
 
     def __truediv__(self, other: Union[str, S3Path]) -> S3Path:
         from ._path import S3Path

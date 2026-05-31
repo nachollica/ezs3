@@ -8,7 +8,7 @@ with typed :class:`~ezs3.Bucket` handles.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
 import boto3
 from botocore.exceptions import ClientError
@@ -138,6 +138,32 @@ class Client:
     def __repr__(self) -> str:
         endpoint = self._boto_client.meta.endpoint_url
         return f"Client(endpoint_url={endpoint!r}, region={self.region_name!r})"
+
+    def _credential_key(self) -> Optional[Tuple[Optional[str], Optional[str], Optional[str]]]:
+        """Return a tuple identifying the currently-resolved credentials.
+
+        The tuple is ``(access_key, secret_key, session_token)`` taken from a
+        frozen snapshot of the session's credentials, or ``None`` when the
+        session has no credentials (anonymous access). Two clients backed by
+        different credentials -- even on the same AWS account -- produce
+        different keys, because each credential set may carry distinct IAM
+        permissions and must therefore be treated as a distinct identity.
+        """
+        creds = self._session.get_credentials()
+        if creds is None:
+            return None
+        frozen = creds.get_frozen_credentials()
+        return (frozen.access_key, frozen.secret_key, frozen.token)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Client):
+            return NotImplemented
+        return self._credential_key() == other._credential_key()
+
+    def __hash__(self) -> int:
+        key = self._credential_key()
+        access_key = key[0] if key is not None else None
+        return hash(("ezs3.Client", access_key))
 
     # Bucket-level operations
 

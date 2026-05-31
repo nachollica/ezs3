@@ -32,6 +32,17 @@ class TestBucketBasic:
         assert a != Bucket("other")
         assert a != "same"
 
+    def test_eq_considers_client(self, mocked_s3: None) -> None:
+        c1 = Client(aws_access_key_id="AK1", aws_secret_access_key="SK1")
+        c2 = Client(aws_access_key_id="AK2", aws_secret_access_key="SK2")
+        same_c1 = Client(aws_access_key_id="AK1", aws_secret_access_key="SK1")
+        a = Bucket("name", client=c1)
+        b = Bucket("name", client=c2)
+        c = Bucket("name", client=same_c1)
+        assert a != b
+        assert a == c
+        assert hash(a) == hash(c)
+
     def test_truediv_returns_attached_path(self, bucket: Bucket) -> None:
         p = bucket / "a/b"
         assert isinstance(p, S3Path)

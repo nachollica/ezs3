@@ -71,3 +71,33 @@ class TestClient:
 
     def test_repr_mentions_region(self, client: Client) -> None:
         assert "region=" in repr(client)
+
+
+class TestClientEquality:
+    def test_same_credentials_compare_equal(self, mocked_s3: None) -> None:
+        a = Client(aws_access_key_id="AK", aws_secret_access_key="SK")
+        b = Client(aws_access_key_id="AK", aws_secret_access_key="SK")
+        assert a == b
+        assert hash(a) == hash(b)
+
+    def test_different_credentials_compare_unequal(self, mocked_s3: None) -> None:
+        a = Client(aws_access_key_id="AK1", aws_secret_access_key="SK1")
+        b = Client(aws_access_key_id="AK2", aws_secret_access_key="SK2")
+        assert a != b
+
+    def test_session_token_distinguishes(self, mocked_s3: None) -> None:
+        a = Client(
+            aws_access_key_id="AK",
+            aws_secret_access_key="SK",
+            aws_session_token="T1",
+        )
+        b = Client(
+            aws_access_key_id="AK",
+            aws_secret_access_key="SK",
+            aws_session_token="T2",
+        )
+        assert a != b
+
+    def test_not_equal_to_other_type(self, client: Client) -> None:
+        assert client != "client"
+        assert client != 0
