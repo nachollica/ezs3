@@ -138,8 +138,10 @@ select = [
     "ISC",      # Detect implicit string concatenation issues
     "PGH",      # Miscellaneous pygrep-hooks (noqa hygiene, etc.)
     "PIE",      # Miscellaneous lints (flake8-pie)
+    "PLW",      # Pylint warnings
     "RSE",      # Style for `raise` statements
     "TCH",      # Move type-only imports into `TYPE_CHECKING` blocks
+    "PT",       # pytest style conventions
 ]
 ignore = [
     "E731",     # Lambda assignment instead of `def`

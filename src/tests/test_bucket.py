@@ -21,7 +21,7 @@ class TestBucketBasic:
         assert str(b) == "s3://x"
 
     def test_empty_name_raises(self, mocked_s3: None) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Bucket name must be a non-empty str"):
             Bucket("")
 
     def test_eq_and_hash(self, mocked_s3: None) -> None:

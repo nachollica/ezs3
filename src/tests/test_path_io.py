@@ -152,7 +152,7 @@ class TestGlob:
         assert names == ["01.log", "02.log"]
 
     def test_glob_empty_pattern_raises(self, bucket: Bucket) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="glob pattern must not be empty"):
             list(bucket.root.glob(""))
 
 

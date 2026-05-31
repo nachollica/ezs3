@@ -60,7 +60,7 @@ class TestHashStream:
             hash_stream(BytesIO(b""), chunk_size=0)
 
     def test_unknown_alg_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported hash algorithm"):
             hash_stream(BytesIO(b"x"), "totally-bogus")
 
 
@@ -73,7 +73,7 @@ class TestParseHash:
 
     def test_lowercases_alg(self) -> None:
         # An algorithm with extraneous case is rejected (strict).
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid algorithm in hash"):
             parse_hash("SHA256:abc123")
 
     def test_rejects_missing_colon(self) -> None:
@@ -89,7 +89,7 @@ class TestParseHash:
             parse_hash("sha256:zzz")
 
     def test_rejects_unknown_alg(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported hash algorithm"):
             parse_hash("nope:abcdef")
 
     def test_rejects_non_string(self) -> None:

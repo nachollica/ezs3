@@ -204,7 +204,7 @@ class TestResolveHash:
             store.get_bytes(123)  # type: ignore[arg-type]
 
     def test_malformed_hash_string(self, store: ManagedStore) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="<alg>:<digest>"):
             store.get_bytes("not-a-hash-string")
 
 

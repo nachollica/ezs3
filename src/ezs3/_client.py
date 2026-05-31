@@ -8,6 +8,7 @@ with typed :class:`~ezs3.Bucket` handles.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import TYPE_CHECKING, List, Optional, Tuple, Union, cast
 
 import boto3
@@ -33,9 +34,7 @@ if TYPE_CHECKING:
     from ._bucket import Bucket
 
 
-_DEFAULT_CLIENT: Optional[Client] = None
-
-
+@lru_cache(maxsize=None)
 def get_default_client() -> Client:
     """Return the process-wide default :class:`Client`.
 
@@ -45,10 +44,7 @@ def get_default_client() -> Client:
     Returns:
         The cached default :class:`Client` instance.
     """
-    global _DEFAULT_CLIENT
-    if _DEFAULT_CLIENT is None:
-        _DEFAULT_CLIENT = Client()
-    return _DEFAULT_CLIENT
+    return Client()
 
 
 def reset_default_client() -> None:
@@ -57,8 +53,7 @@ def reset_default_client() -> None:
     Mainly useful in tests that swap out credentials or wrap calls in a
     ``moto`` mock between cases.
     """
-    global _DEFAULT_CLIENT
-    _DEFAULT_CLIENT = None
+    get_default_client.cache_clear()
 
 
 class Client:

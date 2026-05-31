@@ -38,7 +38,7 @@ class TestConstruction:
         assert p.key == "a/b/c.json"
 
     def test_invalid_uri_no_bucket(self, mocked_s3: None) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid S3 URI"):
             S3Path("s3:///key-without-bucket")
 
     def test_no_args_raises(self) -> None:
@@ -109,7 +109,7 @@ class TestProperties:
         assert p.with_suffix("").key == "a/b/file"
 
     def test_with_suffix_invalid(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid suffix"):
             S3Path("a/b.json").with_suffix("csv")
 
 
